@@ -1,0 +1,111 @@
+model{
+
+#percentage of sessions where the species occurs
+for (i in 1:(n))
+{
+  omega[i] ~ dunif(0,1)
+}
+
+
+#priors for occupancy random species effect
+mu.u ~ dnorm(0,0.001)
+sigma.u ~ dunif(0,10)
+tau.u <- pow(sigma.u,-2)
+
+#priors for detection random species effect
+mu.v ~ dnorm(0,0.001)
+sigma.v ~ dunif(0,10)
+tau.v <- pow(sigma.v,-2)
+
+#hyper-parameters  for habitat effect
+mu.u.habitat ~ dnorm(0,0.001)
+sigma.u.habitat ~ dunif(0,10)
+tau.u.habitat <- pow(sigma.u.habitat,-2)
+
+#hyper-parameters for trail effect
+mu.v.trail ~ dnorm(0,0.001)
+sigma.v.trail ~ dunif(0,10)
+tau.v.trail <- pow(sigma.v.trail,-2)
+
+#scale priors for half-Cauchy distribution 
+sigma.xi.v~dunif(0,10)
+tau.xi.v <- pow(sigma.xi.v, -2) 
+    
+sigma.xi.u~dunif(0,10)
+tau.xi.u <- pow(sigma.xi.u, -2)
+
+#loop over all species
+for (i in 1:(n)) {
+
+    for (l in 1:survey.levels)
+    {
+      w[i,l] ~ dbern(omega[i])       #species present/absent
+    }
+    
+    #mean for all species from the community level prior distributions
+    v[i] ~ dnorm(mu.v, tau.v)  #species specific detection 
+    u[i] ~ dnorm(mu.u, tau.u)  #species specific occupancy 
+    
+    #random session effect for detection
+    xi.v[i] ~ dnorm (0, tau.xi.v)
+    tau.eta.v[i] ~ dgamma (.5, .5) # chi^2 with 1 d.f.
+    for (l in 1:survey.levels)
+    {
+        eta.survey.v[i,l] ~ dnorm (0, tau.eta.v[i])
+    }
+    sigma.theta.v[i] <- abs(xi.v[i])/sqrt(tau.eta.v[i]) #Cauchy = normal/sqrt(chi^2) 
+   
+
+    #random session effect for occupancy
+    xi.u[i] ~ dnorm (0, tau.xi.u)
+    tau.eta.u[i] ~ dgamma (.5, .5) # chi^2 with 1 d.f.
+    for (l in 1:survey.levels)
+    {
+        eta.survey.u[i,l] ~ dnorm (0, tau.eta.u[i])
+    }
+    sigma.theta.u[i] <- abs(xi.u[i])/sqrt(tau.eta.u[i]) #Cauchy = normal/sqrt(chi^2)    
+      
+  
+    #random habitat effect
+    u.habitat[i,1]<-0
+    for (l in 2:habitat.levels)
+    {
+      u.habitat[i,l]~dnorm(mu.u.habitat,tau.u.habitat)
+    }
+    
+    #random trail effect
+    v.trail[i,1]<-0
+    for (l in 2:trail.levels)
+    {
+      v.trail[i,l]~dnorm(mu.v.trail,tau.v.trail)
+    }
+
+
+   #loop over all camera stations
+   for (j in 1:J) {
+      #logistic model for occupancy
+      logit(psi[j,i]) <-  u[i] + xi.u[i]*eta.survey.u[i,survey.factor[j]] + u.habitat[i,habitat.factor[j]]
+      mu.psi[j,i] <- psi[j,i]*w[i,survey.factor[j]] 
+      z[j,i] ~ dbern(mu.psi[j,i])  #Occupancy Matrix
+
+      #logistic model for detection
+      logit(p[j,i]) <-  v[i] + xi.v[i]*eta.survey.v[i,survey.factor[j]] + v.trail[i,trail.factor[j]]
+
+      mu.p[j,i] <- p[j,i]*z[j,i]
+      y[j,i] ~ dbin(mu.p[j,i],k[j])
+
+      #Create simulated dataset to calculate the Bayesian p-value
+      ynew[j,i] ~ dbin(mu.p[j,i],k[j])
+
+      #Pearson residuals
+      d[j,i]<-  (y[j,i] - mu.p[j,i]*k[j])/sqrt((mu.p[j,i]+0.001)*k[j]*(1-mu.p[j,i]-0.001))
+      dnew[j,i]<- (ynew[j,i]-mu.p[j,i]*k[j])/sqrt((mu.p[j,i]+0.001)*k[j]*(1-mu.p[j,i]-0.001))
+      d2[j,i]<- pow(d[j,i],2)
+      dnew2[j,i]<- pow(dnew[j,i],2)
+   }
+}
+
+#Calculate the discrepancy measure
+p.fit<-sum(d2[1:J,1:(n)])
+p.fitnew<-sum(dnew2[1:J,1:(n)])
+}
