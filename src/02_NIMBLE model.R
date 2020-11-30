@@ -18,7 +18,7 @@ mammal_model <- nimbleCode({
     for (i in 1:nsite) {         # Loop over sites
 
       z[i,k] ~ dbern(psi[i,k])
-      logit(psi[i,k]) <- lpsi[k] + beta[1]*equals(veg[i],2) # Fixed effect of open under-story
+      logit(psi[i,k]) <- lpsi[k] + beta1[k]*produ[i] + beta2[k]*pheno[i] + beta3[k]*struc[i]
 
     }
   }
@@ -28,7 +28,7 @@ mammal_model <- nimbleCode({
   for(k in 1:nspec){            # Loop over species
    for (i in 1:nsite) {         # Loop over sites
 
-      logit(p[i,k]) <- lp[k] + alpha[1]*equals(season[i],2) # Fixed effect of rainy season
+      logit(p[i,k]) <- lp[k] + alpha[1]*equals(season[i],2) + alpha[2]*equals(veg[i],2) # Fixed effect of rain season and open/under story
 
       mup[i,k] <- z[i,k] * p[i,k]
       ysum[i,k] ~ dbin(mup[i,k], J[i])
@@ -45,15 +45,13 @@ mammal_model <- nimbleCode({
   for(k in 1:nspec){                    # Loop over species
     lpsi[k] ~ dnorm(mu.lpsi, tau.lpsi)
     lp[k] ~ dnorm(mu.lp, tau.lp)
-
+    beta1[k] ~ dnorm(mu.beta1, tau.beta1)    # produ
+    beta2[k] ~ dnorm(mu.beta2, tau.beta2)    # pheno
+    beta3[k] ~ dnorm(mu.beta3, tau.beta3)    # struc
   }
 
-  for(k in 1:1){                # 1 term in detection model
+  for(k in 1:2){                # 2 terms in detection model
     alpha[k] ~ dnorm(0, 0.1)
-  }
-
-  for(k in 1:1){               # 1 term in occupancy model
-    beta[k] ~ dnorm(0, 0.1)
   }
 
   ## Random intercept priors ##
@@ -67,11 +65,29 @@ mammal_model <- nimbleCode({
   sd.lp ~ dunif(0,5)
   tau.lp <- pow(sd.lp, -2)
 
+  mu.beta1 ~ dnorm(0, 0.1)
+  x.beta1 ~ dt(0,1,1)
+  sd.beta1 <- abs(x.beta1)
+  tau.beta1 <- pow(sd.beta1, -2)
+
+  mu.beta2 ~ dnorm(0, 0.1)
+  x.beta2 ~ dt(0,1,1)
+  sd.beta2 <- abs(x.beta2)
+  tau.beta2 <- pow(sd.beta2, -2)
+
+  mu.beta3 ~ dnorm(0, 0.1)
+  x.beta3 ~ dt(0,1,1)
+  sd.beta3 <- abs(x.beta3)
+  tau.beta3 <- pow(sd.beta3, -2)
+
 })
 
 
 # Monitored parameters ----------------------------------------------------
-params <-  c("mu.psi","mu.p","alpha","beta","lpsi","lp","numspp")
+params <-  c("mu.psi","mu.p","alpha",
+             "mu.beta1","mu.beta2","mu.beta3",
+             "beta1", "beta2", "beta3",
+             "lpsi","lp","numspp")
 
 # Assign constants --------------------------------------------------------
 occ_mod_consts <- list(nspec = n_spp,
@@ -81,7 +97,10 @@ occ_mod_consts <- list(nspec = n_spp,
 occ_mod_data <- list(ysum = Y,
                      J = J,
                      veg = under_vec,
-                     season = season_vec)
+                     season = season_vec,
+                     produ = produ_vec,
+                     pheno = pheno_vec,
+                     struc = struc_vec)
 
 # Initial values ----------------------------------------------------------
 zst <- array(1, dim = c(n_sites,n_spp)) # Observed occurrence as inits for z
@@ -91,7 +110,12 @@ occ_mod_inits <- list(z = zst,
                       mu.psi = runif(1),
                       mu.p = runif(1),
                       alpha = rnorm(1),
-                      beta = rnorm(1)
+                      mu.beta1 = runif(1),
+                      mu.beta2 = runif(1),
+                      mu.beta3 = runif(1),
+                      beta1 = rep(runif(1), occ_mod_consts$nspec),
+                      beta2 = rep(runif(1), occ_mod_consts$nspec),
+                      beta3 = rep(runif(1), occ_mod_consts$nspec)
                       )
 
 # Build the NIMBLE model --------------------------------------------------
@@ -127,8 +151,8 @@ e3-s3
 # Number of samples returned will be floor((niter-nburnin)/thin)
 s4 <- Sys.time()
 runMCMC_samples <- runMCMC(compile_occ_MCMC,
-                           nburnin = 5000,
-                           niter = 20000,
+                           nburnin = 10000,
+                           niter = 40000,
                            nchains = 3,
                            thin = 5,
                            summary = TRUE,

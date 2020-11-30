@@ -1,15 +1,5 @@
-## ________________________________________________________________________
-
-## Title:
-## Purpose:
-## Author:
-## Date:
-
-## Libraries
 library(tidyverse)
 library(nimble)
-## ________________________________________________________________________
-
 
 # Load data ---------------------------------------------------------------
 runMCMC_samples <- readRDS("data output/mammal_mcmc_samples.rds")
@@ -43,6 +33,10 @@ mup <- plot_data %>%
 mupsi <- plot_data %>%
   filter(str_detect(param,"mu.psi"))
 
+mubeta <- plot_data %>%
+  filter(str_detect(param, "mu.beta")) %>%
+  mutate(param = c("produ", "pheno", "struc"))
+
 psi_spp <- plot_data %>%
   filter(str_detect(param,"lpsi")) %>%
   mutate_at(vars(mean:upper), boot::inv.logit) %>%
@@ -53,16 +47,24 @@ p_spp <- plot_data %>%
   mutate_at(vars(mean:upper), boot::inv.logit) %>%
   mutate(spp = spp)
 
-
-# Posterior plots ---------------------------------------------------------
-
-## Detection coefficients
 alphas <- plot_data %>%
   filter(str_detect(param,"alpha")) %>%
-  mutate(param = c("Rain season"))
+  mutate(param = c("Rain season","Open understory"))
 
-alphas
+lpsi <- plot_data %>%
+  filter(str_detect(param, "^lpsi")) %>%
+  pull(mean)
 
+beta_extract <- function(x){
+  plot_data %>%
+    filter(str_detect(param, x)) %>%
+    pull(mean)
+}
+
+beta_list <- map(c("^beta1","^beta2","^beta3"),
+                 beta_extract)
+
+# Detection coefficients --------------------------------------------------
 ggplot(alphas, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange() +
   scale_y_continuous(limits = c(-0.5,0.5))+
@@ -76,12 +78,9 @@ ggplot(alphas, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = u
         axis.text.y = element_text(size = 14, color = "black"))
 ggsave("data output/alphas.jpg")
 
-## Occupancy coefficients
-betas <- plot_data %>%
-  filter(str_detect(param,"beta")) %>%
-  mutate(param = c("Open understory"))
 
-ggplot(betas, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = upper)) +
+# Occupancy coefficients --------------------------------------------------
+ggplot(mubeta, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange() +
   scale_y_continuous(limits = c(-1,1))+
   coord_flip() +
@@ -92,9 +91,10 @@ ggplot(betas, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = up
   theme(axis.title = element_text(size = 14),
         axis.text.x = element_text(size = 14, color = "black"),
         axis.text.y = element_text(size = 14, color = "black"))
-ggsave("data output/betas.jpg")
+ggsave("data output/mubeta.jpg")
 
-## Species occupancy probability
+
+# Species occupancy probability -------------------------------------------
 psi_spp %>%
   ggplot(aes(x = fct_reorder(spp,mean), y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange(size = 0.6) + theme_bw() + scale_y_continuous(limits = c(0,1))+
@@ -109,7 +109,9 @@ psi_spp %>%
 
 ggsave("data output/occprob.jpg")
 
-## Species detection probability
+
+# Species detection probability -------------------------------------------
+
 p_spp %>%
   ggplot(aes(x = fct_reorder(spp,mean), y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange(size = 0.6) + theme_bw() + scale_y_continuous(limits = c(0,1))+
@@ -124,7 +126,8 @@ p_spp %>%
 
 ggsave('data output/detecprob.jpg')
 
-## Species richness
+
+# Species richness --------------------------------------------------------
 plot_data %>%
   filter(str_detect(param,"numspp")) %>%
   ggplot(aes(x = mean))+
@@ -134,6 +137,74 @@ plot_data %>%
   xlab("Species richness")
 
 ggsave("data output/specrich.jpg")
+
+# Random effect curve plots -----------------------------------------------
+
+## Predict over these range of values
+x <- seq(-2,2,0.01)
+
+## Function to extract occupancy probability over x range
+pred_data_extract <- function(sppvec){
+
+  pred1 <- plogis(lpsi[sppvec] + beta_list[[1]][sppvec] * x)
+  pred2 <- plogis(lpsi[sppvec] + beta_list[[2]][sppvec] * x)
+  pred3 <- plogis(lpsi[sppvec] + beta_list[[3]][sppvec] * x)
+
+  data <- tibble(mean = c(pred1,pred2,pred3),
+                 betas = c(rep("beta1", length(x)),
+                           rep("beta2", length(x)),
+                           rep("beta3", length(x))
+                           ),
+                 spp = as.character(sppvec),
+                 xdat = rep(x,3)
+                 )
+}
+
+pred_data <- map_df(1:n_spp,
+                 pred_data_extract)
+
+## Check
+pred_data %>%
+  group_by(betas, spp) %>%
+  tally()
+
+pred_data %>%
+  ggplot(aes(x = xdat, y = mean, color = spp))+
+  geom_line() +
+  scale_color_manual(values=c(rep("black",n_spp))) +
+  theme(legend.position = "none") +
+  xlab("")+
+  ylab("Occupancy probability")+
+  facet_wrap(~ betas)
+
+## Extracting community level predictions to add to plots above
+## Not complete, still a work in progress...
+mu.lpsi <- mupsi %>%
+  pull(mean) %>%
+  logit(.)
+
+mubetas <- mubeta %>%
+  pull(mean)
+
+mu.lpsi_upp <- mupsi %>%
+  pull(upper) %>%
+  logit(.)
+
+mubetas_upp <- mubeta %>%
+  pull(upper)
+
+mubetas_lower <- mubeta %>%
+  pull(lower)
+
+hist(pheno_vec)
+hist(struc_vec)
+hist(produ_vec)
+
+x <- seq(-2,2,0.01)
+pred1 <- plogis(mu.lpsi[1] + mubetas[1] * x)
+pred2 <- plogis(mu.lpsi[1] + mubetas[2] * x)
+pred3 <- plogis(mu.lpsi[1] + mubetas[3] * x)
+
 
 # Write workspace ---------------------------------------------------------
 save.image("data output/plotting_data.RData")
