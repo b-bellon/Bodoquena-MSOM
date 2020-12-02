@@ -3,6 +3,7 @@ library(coda)
 library(tidyverse)
 
 # Read in basic JAGS model workspace --------------------------------------
+load("data output/model_data.RData")
 runMCMC_samples <- readRDS("data output/mammal_mcmc_samples.rds")
 mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
@@ -17,11 +18,10 @@ covs_all_sc
 (n_samp <- nrow(mod))                      # 18000 is too many!
 select_samp <- sort(sample(1:n_samp, 100)) # Chose random sample of 100 posterior draws (can increase this)
 (n_samp <- length(select_samp))
-
-n_pix <- nrow(covs_all_sc)
+(n_pix <- nrow(covs_all_sc))
 
 ## Create posterior predictive distribution for Z for all pentads
-str(zPen <- array(NA, dim = c(n_pix,n_spp, n_samp)))
+str(zPen <- array(NA, dim = c(n_pix, n_spp, n_samp)))
 
 # Acccess node names and extract posterior samples ------------------------
 att <- attributes(mod)$dimnames[2][[1]][]
@@ -35,6 +35,8 @@ for(i in 1:length(coeffs)){
 names(coeff_out) <- c("LPSI","BETA1","BETA2","BETA3")
 
 # Generate occupancy predictions for 100 samples --------------------------
+start <- Sys.time()
+
 for(i in 1:n_pix){
 
   print.vec <- seq(0,n_pix, by = 10000)
@@ -50,20 +52,31 @@ for(i in 1:n_pix){
   }
 }
 
+end <- Sys.time()
+
+## Runtime
+end - start
+
 str(zPen)
 
 # Compute posterior distribution of SR - collapse z array -----------------
 SR <- apply(zPen, c(1,3), sum, na.rm= TRUE)   # posterior distribution
 pmSR <- apply(SR, 1, mean, na.rm = TRUE)      # posterior mean
+lowSR <- apply(SR, 1,function (x) quantile(x, probs = 0.025)) # posterior lower bound
+uppSR <- apply(SR, 1,function (x) quantile(x, probs = 0.975)) # posterior upper bound
 sdSR <- apply(SR, 1, sd, na.rm = TRUE)        # posterior standard deviation
+
+pmSR[1:10];lowSR[1:10];uppSR[1:10]
 
 tibble(ID_pix = covs_all_sc$ID_pix,
        spp_rich_mean = pmSR,
+       spp_rich_low = lowSR,
+       spp_rich_upp = uppSR,
        spp_rich_sd = sdSR) %>%
   write_csv("data output/spp_richness.csv")
 
 # Save workspace ----------------------------------------------------------
-save(list = c(ls()[!ls() %in% c("SR","pmSR","sdSR","covs_all_sc")]),
+save(list = c(ls()[!ls() %in% c("SR","covs_all_sc")]),
      file = "data output/Species richness maps.RData")
 
 
