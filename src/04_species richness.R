@@ -1,6 +1,9 @@
 library(boot)
 library(coda)
 library(tidyverse)
+library(raster)
+library(rgdal)
+library(grDevices)
 
 # Read in basic JAGS model workspace --------------------------------------
 load("data output/model_data.RData")
@@ -8,8 +11,31 @@ runMCMC_samples <- readRDS("data output/mammal_mcmc_samples.rds")
 mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
 
+
+# Read LM rasters ---------------------------------------------------------
+NDVI_produ <- raster("data input/NDVI_produ_250.tif")
+NDVI_pheno <- raster("data input/NDVI_pheno_250.tif")
+NDVI_struc <- raster("data input/NDVI_struc_250.tif")
+
+
+# Extract LM values + pixels IDs ------------------------------------------
+NDVI_produ_vec <- as.vector(NDVI_produ)
+NDVI_pheno_vec <- as.vector(NDVI_pheno)
+NDVI_struc_vec <- as.vector(NDVI_struc)
+
+LMs_df <- as.data.frame(cbind(NDVI_produ_vec, NDVI_pheno_vec, NDVI_struc_vec))
+LMs_df$ID_pix <- seq.int(nrow(LMs_df))
+
+colnames(LMs_df) <- c("Produ","Pheno","Struc", "ID_pix")
+LMs_df <- LMs_df[, c(4, 1, 2, 3)] #reorder columns
+
+LMs_df[,2]<- as.integer(LMs_df[,2])
+LMs_df[,3]<- as.integer(LMs_df[,3])
+LMs_df[,4]<- as.integer(LMs_df[,4])
+
+
 # Read in all pentad covs, scale to create predictor ----------------------
-covs_all_sc <- readxl::read_xlsx("data input/Id_pix.xlsx") %>%
+covs_all_sc <- LMs_df %>%
   mutate_at(vars(Produ:Struc),scale) %>%
   mutate_at(vars(Produ:Struc),as.numeric)
 covs_all_sc
@@ -74,6 +100,33 @@ tibble(ID_pix = covs_all_sc$ID_pix,
        spp_rich_upp = uppSR,
        spp_rich_sd = sdSR) %>%
   write_csv("data output/spp_richness.csv")
+
+
+# Generate rasters with results -------------------------------------------
+pmSR_raster <- setValues(NDVI_produ, pmSR)
+sdSR_raster <- setValues(NDVI_produ, sdSR)
+lowSR_raster <- setValues(NDVI_produ, lowSR)
+uppSR_raster <- setValues(NDVI_produ, uppSR)
+
+# display.brewer.all()
+col_richness <- colorRampPalette(c("red", "yellow", "darkgreen", "black"))
+col_richness <-col_richness(10)
+col_sd <- colorRampPalette(c("white", "papayawhip", "firebrick2"))
+col_sd <- col_sd(10)
+
+jpeg("data output/spp_richness_plots.jpg", width = 1000, height = 1000, res = 200)
+par(mfrow=c(2,3), mai=c(0.5, 0.3, 0.3, 0.3))
+plot(pmSR_raster, col=col_richness, main='Mean spp. richness')
+plot(lowSR_raster, col=col_richness, main='Lower limit')
+plot(uppSR_raster, col=col_richness,main='Upper limit')
+plot(sdSR_raster, col=col_sd, main='Standard Deviation')
+dev.off()
+
+writeRaster(pmSR_raster, filename="data output/Mean_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(sdSR_raster, filename="data output/SD_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(lowSR_raster, filename="data output/Lower_limit_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(uppSR_raster, filename="data output/Upper_limit_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
+
 
 # Save workspace ----------------------------------------------------------
 save(list = c(ls()[!ls() %in% c("SR","covs_all_sc")]),
