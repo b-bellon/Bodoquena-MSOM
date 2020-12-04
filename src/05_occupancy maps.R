@@ -23,7 +23,6 @@ select_samp <- sort(sample(1:n_samp, 100)) # Chose random sample of 100 posterio
 # Create posterior predictive distribution for psi for each species -------
 str(psi_pen <- array(NA, dim = c(n_pix, n_samp,n_spp)))
 
-
 # Acccess node names and extract posterior samples ------------------------
 att <- attributes(mod)$dimnames[2][[1]][]
 coeffs <- c("lpsi","beta1","beta2","beta3")
@@ -61,10 +60,10 @@ for (s in 1:n_spp){
 ## psi:: mean and sd
 extract_psi_meansd <- function(psifun){
   df <- apply(psi_pen, c(1,3), psifun, na.rm = TRUE)  %>%
-    as_data_frame  %>%
-    magrittr::set_colnames(spp_names) %>%
+    as_tibble  %>%
+    magrittr::set_colnames(spp) %>%
     mutate(ID_pix = covs_all_sc$ID_pix) %>%
-    select(ID_pix, everything())
+    dplyr::select(ID_pix, everything())
 }
 psifuncs <- list(list(mean),list(sd))
 psi_spdf <- invoke_map(.f = extract_psi_meansd,
@@ -74,11 +73,12 @@ names(psi_spdf) <- c("mean","sd")
 ## psi:: 95% CIs
 extract_psi_quart <- function(lev){
   df <- apply(psi_pen, c(1,3), function (x) quantile(x, probs = lev)) %>%
-    as_data_frame  %>%
-    magrittr::set_colnames(spp_names) %>%
+    as_tibble  %>%
+    magrittr::set_colnames(spp) %>%
     mutate(ID_pix = covs_all_sc$ID_pix) %>%
-    select(ID_pix, everything())
+    dplyr::select(ID_pix, everything())
 }
+
 lev <- c(0.025,0.975)
 psi_spdf_quart <- map(.x = lev,
                       .f = extract_psi_quart)
