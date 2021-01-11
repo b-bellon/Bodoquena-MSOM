@@ -9,7 +9,7 @@ mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
 
 # Read in all pentad covs, scale to create predictor ----------------------
-covs_all_sc <- readxl::read_xlsx("data input/Id_pix.xlsx") %>%
+covs_all_sc <- LM_df %>%
   mutate_at(vars(Produ:Struc),scale) %>%
   mutate_at(vars(Produ:Struc),as.numeric)
 covs_all_sc
