@@ -1,6 +1,8 @@
 library(boot)
 library(coda)
 library(tidyverse)
+library(raster)
+library(grDevices)
 
 # Read in basic JAGS model workspace --------------------------------------
 load("data output/model_data.RData")
@@ -93,3 +95,24 @@ write_csv(psi_all[[1]],"data output/psi_mean.csv")
 write_csv(psi_all[[2]],"data output/psi_sd.csv")
 write_csv(psi_all[[3]],"data output/psi_low.csv")
 write_csv(psi_all[[4]],"data output/psi_upp.csv")
+
+
+# Generate rasters with results -------------------------------------------
+psi_mean <- read_csv("data output/psi_mean.csv")
+raster_template <- raster("data input/NDVI_produ_250.tif")
+dir.create("data output/spp_psi_mean")
+
+breaks_seq <- seq(0, 1, by = 0.1) # Color gradient with 10 values between 0.0 and 1.0
+col_occupancy <- colorRampPalette(c("yellow", "magenta", "blue", "black"))(length(breaks_seq))
+
+for(k in 2:length(psi_mean)){
+ psi_mean_mx <- as.matrix(psi_mean[,k])
+ psi_mean_raster <- setValues(raster_template, psi_mean_mx)
+ name_spp <- colnames(psi_mean_mx)
+
+ writeRaster(psi_mean_raster, filename=paste0("data output/spp_psi_mean/", name_spp, "_psi_mean.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+
+ jpeg(paste0("data output/spp_psi_mean/", name_spp, " psi mean.jpg"), width = 1000, height = 1000, res = 200)
+ plot(psi_mean_raster, breaks=breaks_seq, col=col_occupancy, main=paste0(name_spp, " mean occupancy probability"), cex.main = 0.8)
+ dev.off()
+}
