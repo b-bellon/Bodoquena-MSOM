@@ -87,7 +87,7 @@ mammal_model <- nimbleCode({
 params <-  c("mu.psi","mu.p","alpha",
              "mu.beta1","mu.beta2","mu.beta3",
              "beta1", "beta2", "beta3",
-             "lpsi","lp","numspp")
+             "lpsi","lp","numspp","z")
 
 # Assign constants --------------------------------------------------------
 occ_mod_consts <- list(nspec = n_spp,
@@ -151,8 +151,8 @@ e3-s3
 # Number of samples returned will be floor((niter-nburnin)/thin)
 s4 <- Sys.time()
 runMCMC_samples <- runMCMC(compile_occ_MCMC,
-                           nburnin = 10000,
-                           niter = 40000,
+                           nburnin = 1000,
+                           niter = 5000,
                            nchains = 3,
                            thin = 5,
                            summary = TRUE,
@@ -165,6 +165,9 @@ e4-s4 + e3-s3 + e2-s2 + e1-s1 + e0-s0
 
 # Check output ------------------------------------------------------------
 head(runMCMC_samples$summary$all.chains)
+
+## WAIC check
+runMCMC_samples$WAIC # 4045.371
 
 # Write summary to file ---------------------------------------------------
 runMCMC_samples$summary$all.chains %>%
