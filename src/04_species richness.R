@@ -33,6 +33,7 @@ LMs_df[,2]<- as.integer(LMs_df[,2])
 LMs_df[,3]<- as.integer(LMs_df[,3])
 LMs_df[,4]<- as.integer(LMs_df[,4])
 
+write.csv(LMs_df, "data input/Landscape_metrics_values.csv", row.names = FALSE)
 
 # Read in all pentad covs, scale to create predictor ----------------------
 covs_all_sc <- LMs_df %>%
