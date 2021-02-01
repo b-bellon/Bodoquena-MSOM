@@ -11,7 +11,7 @@ mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
 
 # Read in all pentad covs, scale to create predictor ----------------------
-covs_all_sc <- LM_df %>%
+covs_all_sc <- readxl::read_xlsx("data input/Id_pix.xlsx") %>%
   mutate_at(vars(Produ:Struc),scale) %>%
   mutate_at(vars(Produ:Struc),as.numeric)
 covs_all_sc
@@ -116,3 +116,5 @@ for(k in 2:length(psi_mean)){
  plot(psi_mean_raster, breaks=breaks_seq, col=col_occupancy, main=paste0(name_spp, " mean occupancy probability"), cex.main = 0.8)
  dev.off()
 }
+
+saveRDS(psi_all, "data output/psi_all_data.RDS")
