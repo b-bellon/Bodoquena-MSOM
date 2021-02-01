@@ -140,23 +140,34 @@ ggsave("data output/specrich.jpg")
 
 # Random effect curve plots -----------------------------------------------
 
+## Used to back-transform predictions
+beta1_sc <- scale(station_data$produ_250) # beta 1
+beta2_sc <- scale(station_data$pheno_250) # beta 2
+beta3_sc <- scale(station_data$struc_250) # beta 3
+
 ## Predict over these range of values
 x <- seq(-2,2,0.01)
 
 ## Function to extract occupancy probability over x range
 pred_data_extract <- function(sppvec){
 
+
+  x1 <- x * attr(beta1_sc, 'scaled:scale') + attr(beta1_sc, 'scaled:center')
   pred1 <- plogis(lpsi[sppvec] + beta_list[[1]][sppvec] * x)
+
+  x2 <- x * attr(beta2_sc, 'scaled:scale') + attr(beta2_sc, 'scaled:center')
   pred2 <- plogis(lpsi[sppvec] + beta_list[[2]][sppvec] * x)
+
+  x3 <- x * attr(beta3_sc, 'scaled:scale') + attr(beta3_sc, 'scaled:center')
   pred3 <- plogis(lpsi[sppvec] + beta_list[[3]][sppvec] * x)
 
   data <- tibble(mean = c(pred1,pred2,pred3),
-                 betas = c(rep("beta1", length(x)),
-                           rep("beta2", length(x)),
-                           rep("beta3", length(x))
+                 betas = c(rep("a) Productivity", length(x)),
+                           rep("b) Phenology", length(x)),
+                           rep("c) Structure", length(x))
                            ),
                  spp = as.character(sppvec),
-                 xdat = rep(x,3)
+                 xdat = c(x1,x2,x3)
                  )
 }
 
@@ -175,7 +186,7 @@ pred_data %>%
   theme(legend.position = "none") +
   xlab("")+
   ylab("Occupancy probability")+
-  facet_wrap(~ betas)
+  facet_wrap(~ betas, scales = "free_x")
 
 ## Extracting community level predictions to add to plots above
 ## Not complete, still a work in progress...
