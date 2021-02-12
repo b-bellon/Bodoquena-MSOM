@@ -188,6 +188,8 @@ pred_data %>%
   ylab("Occupancy probability")+
   facet_wrap(~ betas, scales = "free_x")
 
+ggsave('data output/Occ prob curves.jpg')
+
 ## Extracting community level predictions to add to plots above
 ## Not complete, still a work in progress...
 mu.lpsi <- mupsi %>%
