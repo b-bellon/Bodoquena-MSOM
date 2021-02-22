@@ -1,9 +1,17 @@
 library(tidyverse)
 library(nimble)
+library(glue)
+library(bayesboot)
+library(bayestestR)
+
+# Define spatial scale ----------------------------------------------------
+spatscale <- 750 # meters
 
 # Load data ---------------------------------------------------------------
-runMCMC_samples <- readRDS("data output/mammal_mcmc_samples.rds")
-load("data output/model_data.RData")
+spatdir <- glue("data output/modelout_{spatscale}m")
+runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
+mod <- as.matrix(runMCMC_samples$samples)
+load(glue("data output/model_data_{spatscale}m.RData"))
 
 # Common name search ------------------------------------------------------
 
@@ -24,7 +32,7 @@ plot_data <- runMCMC_samples$summary$all.chains %>%
   as_tibble() %>%
   janitor::clean_names() %>%
   mutate(param = row.names(runMCMC_samples$summary$all.chains)) %>%
-  select(param, mean, x95_percent_ci_low, x95_percent_ci_upp) %>%
+  dplyr::select(param, mean, x95_percent_ci_low, x95_percent_ci_upp) %>%
   rename(lower = x95_percent_ci_low, upper = x95_percent_ci_upp)
 
 mup <- plot_data %>%
@@ -35,7 +43,8 @@ mupsi <- plot_data %>%
 
 mubeta <- plot_data %>%
   filter(str_detect(param, "mu.beta")) %>%
-  mutate(param = c("produ", "pheno", "struc"))
+  mutate(param = as.factor(c("produ", "pheno", "struc"))) %>%
+  mutate(param = fct_relevel(param, "produ", "pheno", "struc"))
 
 psi_spp <- plot_data %>%
   filter(str_detect(param,"lpsi")) %>%
@@ -65,7 +74,7 @@ beta_list <- map(c("^beta1","^beta2","^beta3"),
                  beta_extract)
 
 # Detection coefficients --------------------------------------------------
-ggplot(alphas, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = upper)) +
+ggplot(alphas, aes(x = param, y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange() +
   scale_y_continuous(limits = c(-0.5,0.5))+
   coord_flip() +
@@ -76,23 +85,43 @@ ggplot(alphas, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = u
   theme(axis.title = element_text(size = 14),
         axis.text.x = element_text(size = 14, color = "black"),
         axis.text.y = element_text(size = 14, color = "black"))
-ggsave("data output/alphas.jpg")
-
+ggsave(glue("{spatdir}/alphas_{spatscale}m.jpg"))
 
 # Occupancy coefficients --------------------------------------------------
-ggplot(mubeta, aes(x = fct_reorder(param,mean), y = mean, ymin = lower, ymax = upper)) +
+ggplot(mubeta, aes(x = fct_rev(param), y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange() +
   scale_y_continuous(limits = c(-1,1))+
   coord_flip() +
   geom_hline(yintercept = 0, linetype = "dotted") +
   ylab("Estimate (+- 95% CI)") + xlab("")+
   theme_classic()+
-  labs(title = "Occupancy")+
+  labs(title = glue("Community occupancy at {spatscale}m scale"))+
   theme(axis.title = element_text(size = 14),
         axis.text.x = element_text(size = 14, color = "black"),
         axis.text.y = element_text(size = 14, color = "black"))
-ggsave("data output/mubeta.jpg")
+ggsave(glue("{spatdir}/mubeta_{spatscale}m.jpg"))
 
+
+# HDI beta & alpha plots --------------------------------------------------
+produ <- mod[,"mu.beta1"]
+pheno <- mod[,"mu.beta2"]
+struc <- mod[,"mu.beta3"]
+
+jpeg(glue("{spatdir}/HDI_mubeta_{spatscale}m.jpg"),width = 1000, height = 1100, res = 200)
+par(mfrow = c(3,1))
+bayesboot::plotPost(produ, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(pheno, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(struc, credMass = 0.89, xlim = c(-0.5,0.8))
+dev.off()
+
+rain_season <- mod[,"alpha[1]"]
+open_understory <- mod[,"alpha[2]"]
+
+jpeg(glue("{spatdir}/HDI_alpha_{spatscale}m.jpg"),width = 1000, height = 1100, res = 200)
+par(mfrow = c(2,1))
+bayesboot::plotPost(rain_season, credMass = 0.89, xlim = c(-0.3,0.3))
+bayesboot::plotPost(open_understory, credMass = 0.89, xlim = c(-0.3,0.3))
+dev.off()
 
 # Species occupancy probability -------------------------------------------
 psi_spp %>%
@@ -106,12 +135,9 @@ psi_spp %>%
   theme(axis.text.y=element_text(size=13),
         axis.text.x=element_text(size=13),
         axis.title.x = element_text(size=13))
-
-ggsave("data output/occprob.jpg")
-
+ggsave(glue("{spatdir}/occprob_{spatscale}m.jpg"))
 
 # Species detection probability -------------------------------------------
-
 p_spp %>%
   ggplot(aes(x = fct_reorder(spp,mean), y = mean, ymin = lower, ymax = upper)) +
   geom_pointrange(size = 0.6) + theme_bw() + scale_y_continuous(limits = c(0,1))+
@@ -123,9 +149,7 @@ p_spp %>%
   theme(axis.text.y=element_text(size=13),
         axis.text.x=element_text(size=13),
         axis.title.x = element_text(size=13))
-
-ggsave('data output/detecprob.jpg')
-
+ggsave(glue("{spatdir}/detecprob_{spatscale}m.jpg"))
 
 # Species richness --------------------------------------------------------
 plot_data %>%
@@ -136,14 +160,18 @@ plot_data %>%
                  color = "black")+
   xlab("Species richness")
 
-ggsave("data output/specrich.jpg")
+ggsave(glue("{spatdir}/specrich_{spatscale}m.jpg"))
 
 # Random effect curve plots -----------------------------------------------
 
 ## Used to back-transform predictions
-beta1_sc <- scale(station_data$produ_250) # beta 1
-beta2_sc <- scale(station_data$pheno_250) # beta 2
-beta3_sc <- scale(station_data$struc_250) # beta 3
+prodvar <- glue("produ_{spatscale}")
+phenovar <- glue("pheno_{spatscale}")
+strucvar <- glue("struc_{spatscale}")
+
+beta1_sc <- scale(station_data %>% pull({{prodvar}}))
+beta2_sc <- scale(station_data %>% pull({{phenovar}}))
+beta3_sc <- scale(station_data %>% pull({{strucvar}}))
 
 ## Predict over these range of values
 x <- seq(-2,2,0.01)
@@ -188,37 +216,37 @@ pred_data %>%
   ylab("Occupancy probability")+
   facet_wrap(~ betas, scales = "free_x")
 
-ggsave('data output/Occ prob curves.jpg')
+ggsave(glue("{spatdir}/Occ prob curves_{spatscale}m.jpg"))
+
 
 ## Extracting community level predictions to add to plots above
 ## Not complete, still a work in progress...
-mu.lpsi <- mupsi %>%
-  pull(mean) %>%
-  logit(.)
-
-mubetas <- mubeta %>%
-  pull(mean)
-
-mu.lpsi_upp <- mupsi %>%
-  pull(upper) %>%
-  logit(.)
-
-mubetas_upp <- mubeta %>%
-  pull(upper)
-
-mubetas_lower <- mubeta %>%
-  pull(lower)
-
-hist(pheno_vec)
-hist(struc_vec)
-hist(produ_vec)
-
-x <- seq(-2,2,0.01)
-pred1 <- plogis(mu.lpsi[1] + mubetas[1] * x)
-pred2 <- plogis(mu.lpsi[1] + mubetas[2] * x)
-pred3 <- plogis(mu.lpsi[1] + mubetas[3] * x)
+# mu.lpsi <- mupsi %>%
+#   pull(mean) %>%
+#   logit(.)
+#
+# mubetas <- mubeta %>%
+#   pull(mean)
+#
+# mu.lpsi_upp <- mupsi %>%
+#   pull(upper) %>%
+#   logit(.)
+#
+# mubetas_upp <- mubeta %>%
+#   pull(upper)
+#
+# mubetas_lower <- mubeta %>%
+#   pull(lower)
+#
+# hist(pheno_vec)
+# hist(struc_vec)
+# hist(produ_vec)
+#
+# x <- seq(-2,2,0.01)
+# pred1 <- plogis(mu.lpsi[1] + mubetas[1] * x)
+# pred2 <- plogis(mu.lpsi[1] + mubetas[2] * x)
+# pred3 <- plogis(mu.lpsi[1] + mubetas[3] * x)
 
 
 # Write workspace ---------------------------------------------------------
-save.image("data output/plotting_data.RData")
-
+save.image(glue("{spatdir}/plotting_data_{spatscale}m.RData"))

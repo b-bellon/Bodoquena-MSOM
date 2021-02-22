@@ -2,13 +2,23 @@ library(tidyverse)
 library(boot)
 library(coda)
 library(nimble)
+library(glue)
 
-# Load functions ----------------------------------------------------------
+# Define spatial scale ----------------------------------------------------
+spatscale <- 750 # meters
 
-# Import workspace --------------------------------------------------------
-load("data output/model_data.RData")
+# Create dedicated output directory ---------------------------------------
+spatdir <- glue("data output/modelout_{spatscale}m")
 
-# Prepare data ------------------------------------------------------------
+if(dir.exists(spatdir)){
+  print("Directory exists")
+  } else {
+    dir.create(spatdir)
+    print("Directory created")
+  }
+
+# Import scale-specific workspace -----------------------------------------
+load(glue("data output/model_data_{spatscale}m.RData"))
 
 # Define model ------------------------------------------------------------
 mammal_model <- nimbleCode({
@@ -110,16 +120,15 @@ occ_mod_inits <- list(z = zst,
                       mu.psi = runif(1),
                       mu.p = runif(1),
                       alpha = rnorm(1),
-                      mu.beta1 = runif(1),
-                      mu.beta2 = runif(1),
-                      mu.beta3 = runif(1),
-                      beta1 = rep(runif(1), occ_mod_consts$nspec),
-                      beta2 = rep(runif(1), occ_mod_consts$nspec),
-                      beta3 = rep(runif(1), occ_mod_consts$nspec)
+                      mu.beta1 = rnorm(1),
+                      mu.beta2 = rnorm(1),
+                      mu.beta3 = rnorm(1),
+                      beta1 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta2 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta3 = rep(rnorm(1), occ_mod_consts$nspec)
                       )
 
 # Build the NIMBLE model --------------------------------------------------
-
 s0 <- Sys.time()
 occ_model <- nimbleModel(code = mammal_model, name = "Mammal MSOM",
                          constants = occ_mod_consts,
@@ -150,9 +159,18 @@ e3-s3
 
 # Number of samples returned will be floor((niter-nburnin)/thin)
 s4 <- Sys.time()
+
+# Final run
+# burn <- 15000
+# iter <- 60000
+
+# Test
+burn <- 1000
+iter <- 5000
+
 runMCMC_samples <- runMCMC(compile_occ_MCMC,
-                           nburnin = 1000,
-                           niter = 5000,
+                           nburnin = burn,
+                           niter = iter,
                            nchains = 3,
                            thin = 5,
                            summary = TRUE,
@@ -174,15 +192,15 @@ runMCMC_samples$summary$all.chains %>%
   as_tibble %>%
   mutate(param = rownames(runMCMC_samples$summary$all.chains)) %>%
   select(param, everything()) %>%
-  write_csv("data output/mammal_mcmc_out.csv")
+  write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m.csv"))
 
 # Write posteriors to file ------------------------------------------------
-saveRDS(runMCMC_samples, "data output/mammal_mcmc_samples.rds")
+saveRDS(runMCMC_samples, glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
 
 # MCMC plotting -----------------------------------------------------------
 MCMCvis::MCMCtrace(runMCMC_samples$samples,
           pdf = TRUE,
-          filename = "data output/nimble_traceplots.pdf",
+          filename = glue("{spatdir}/nimble_traceplots_{spatscale}m.pdf"),
           ind = TRUE,
           n.eff = TRUE,
           Rhat = TRUE)

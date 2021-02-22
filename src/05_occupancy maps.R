@@ -3,15 +3,20 @@ library(coda)
 library(tidyverse)
 library(raster)
 library(grDevices)
+library(glue)
+
+# Define spatial scale ----------------------------------------------------
+spatscale <- 750 # meters
 
 # Read in basic JAGS model workspace --------------------------------------
-load("data output/model_data.RData")
-runMCMC_samples <- readRDS("data output/mammal_mcmc_samples.rds")
+spatdir <- glue("data output/modelout_{spatscale}m")
+load(glue("data output/model_data_{spatscale}m.RData"))
+runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
 mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
 
 # Read in all pentad covs, scale to create predictor ----------------------
-LMs_df <- read.csv("data input/Landscape_metrics_values.csv")
+LMs_df <- read.csv(glue("data input/Landscape_metrics_values_{spatscale}m.csv"))
 
 covs_all_sc <- LMs_df %>%
   mutate_at(vars(Produ:Struc),scale) %>%
@@ -93,30 +98,36 @@ psi_all <- c(psi_spdf,psi_spdf_quart)
 names(psi_all)
 
 # Write psi measures to file ----------------------------------------------
-write_csv(psi_all[[1]],"data output/psi_mean.csv")
-write_csv(psi_all[[2]],"data output/psi_sd.csv")
-write_csv(psi_all[[3]],"data output/psi_low.csv")
-write_csv(psi_all[[4]],"data output/psi_upp.csv")
-
+write_csv(psi_all[[1]],glue("{spatdir}/psi_mean_{spatscale}m.csv"))
+write_csv(psi_all[[2]],glue("{spatdir}/psi_sd_{spatscale}m.csv"))
+write_csv(psi_all[[3]],glue("{spatdir}/psi_low_{spatscale}m.csv"))
+write_csv(psi_all[[4]],glue("{spatdir}/psi_upp_{spatscale}m.csv"))
 
 # Generate rasters with results -------------------------------------------
-psi_mean <- read_csv("data output/psi_mean.csv")
-raster_template <- raster("data input/NDVI_produ_250.tif")
-dir.create("data output/spp_psi_mean")
+psi_mean <- read_csv(glue("{spatdir}/psi_mean_{spatscale}m.csv"))
+raster_template <- raster(glue("data input/NDVI_produ_{spatscale}.tif"))
+dir.create(glue("{spatdir}/spp_psi_mean"))
 
 breaks_seq <- seq(0, 1, by = 0.1) # Color gradient with 10 values between 0.0 and 1.0
 col_occupancy <- colorRampPalette(c("yellow", "magenta", "blue", "black"))(length(breaks_seq))
 
 for(k in 2:length(psi_mean)){
+
  psi_mean_mx <- as.matrix(psi_mean[,k])
  psi_mean_raster <- setValues(raster_template, psi_mean_mx)
  name_spp <- colnames(psi_mean_mx)
 
- writeRaster(psi_mean_raster, filename=paste0("data output/spp_psi_mean/", name_spp, "_psi_mean.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+ writeRaster(psi_mean_raster,
+             filename=glue("{spatdir}/spp_psi_mean/{name_spp}_psi_mean_{spatscale}m.tif"),
+             format="GTiff", datatype="FLT4S",
+             overwrite=TRUE)
 
- jpeg(paste0("data output/spp_psi_mean/", name_spp, " psi mean.jpg"), width = 1000, height = 1000, res = 200)
- plot(psi_mean_raster, breaks=breaks_seq, col=col_occupancy, main=paste0(name_spp, " mean occupancy probability"), cex.main = 0.8)
+ jpeg(glue("{spatdir}/spp_psi_mean/{name_spp}_psi_mean_{spatscale}m.jpg"),
+      width = 1000, height = 1000, res = 200)
+  plot(psi_mean_raster, breaks=breaks_seq, col=col_occupancy,
+       main=paste0(name_spp, " mean occupancy probability"), cex.main = 0.8)
  dev.off()
+
 }
 
-saveRDS(psi_all, "data output/psi_all_data.RDS")
+saveRDS(psi_all, glue("{spatdir}/psi_all_data_{spatscale}m.RDS"))

@@ -4,19 +4,22 @@ library(tidyverse)
 library(raster)
 library(rgdal)
 library(grDevices)
+library(glue)
+
+# Define spatial scale ----------------------------------------------------
+spatscale <- 750 # meters
 
 # Read in basic JAGS model workspace --------------------------------------
-load("data output/model_data.RData")
-runMCMC_samples <- readRDS("data output/mammal_mcmc_samples.rds")
+spatdir <- glue("data output/modelout_{spatscale}m")
+load(glue("data output/model_data_{spatscale}m.RData"))
+runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
 mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
 
-
 # Read LM rasters ---------------------------------------------------------
-NDVI_produ <- raster("data input/NDVI_produ_250.tif")
-NDVI_pheno <- raster("data input/NDVI_pheno_250.tif")
-NDVI_struc <- raster("data input/NDVI_struc_250.tif")
-
+NDVI_produ <- raster(glue("data input/NDVI_produ_{spatscale}.tif"))
+NDVI_pheno <- raster(glue("data input/NDVI_pheno_{spatscale}.tif"))
+NDVI_struc <- raster(glue("data input/NDVI_struc_{spatscale}.tif"))
 
 # Extract LM values + pixels IDs ------------------------------------------
 NDVI_produ_vec <- as.vector(NDVI_produ)
@@ -33,7 +36,7 @@ LMs_df[,2]<- as.integer(LMs_df[,2])
 LMs_df[,3]<- as.integer(LMs_df[,3])
 LMs_df[,4]<- as.integer(LMs_df[,4])
 
-write.csv(LMs_df, "data input/Landscape_metrics_values.csv", row.names = FALSE)
+write.csv(LMs_df, glue("data input/Landscape_metrics_values_{spatscale}m.csv"), row.names = FALSE)
 
 # Read in all pentad covs, scale to create predictor ----------------------
 covs_all_sc <- LMs_df %>%
@@ -100,8 +103,7 @@ tibble(ID_pix = covs_all_sc$ID_pix,
        spp_rich_low = lowSR,
        spp_rich_upp = uppSR,
        spp_rich_sd = sdSR) %>%
-  write_csv("data output/spp_richness.csv")
-
+  write_csv(glue("{spatdir}/spp_richness_{spatscale}m.csv"))
 
 # Generate rasters with results -------------------------------------------
 pmSR_raster <- setValues(NDVI_produ, pmSR)
@@ -115,7 +117,7 @@ col_richness <-col_richness(10)
 col_sd <- colorRampPalette(c("white", "papayawhip", "firebrick2"))
 col_sd <- col_sd(10)
 
-jpeg("data output/spp_richness_plots.jpg", width = 1000, height = 1000, res = 200)
+jpeg(glue("{spatdir}/spp_richness_{spatscale}m.jpg"), width = 1000, height = 1000, res = 200)
 par(mfrow=c(2,3), mai=c(0.5, 0.3, 0.3, 0.3))
 plot(pmSR_raster, col=col_richness, main='Mean spp. richness')
 plot(lowSR_raster, col=col_richness, main='Lower limit')
@@ -123,14 +125,13 @@ plot(uppSR_raster, col=col_richness,main='Upper limit')
 plot(sdSR_raster, col=col_sd, main='Standard Deviation')
 dev.off()
 
-writeRaster(pmSR_raster, filename="data output/Mean_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
-writeRaster(sdSR_raster, filename="data output/SD_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
-writeRaster(lowSR_raster, filename="data output/Lower_limit_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
-writeRaster(uppSR_raster, filename="data output/Upper_limit_spp_richness.tif", format="GTiff", datatype="FLT4S", overwrite=TRUE)
-
+writeRaster(pmSR_raster, filename= glue("{spatdir}/Mean_spp_richness_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(pmSR_raster, filename= glue("{spatdir}/SD_spp_richness_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(pmSR_raster, filename= glue("{spatdir}/Lower_limit_spp_r_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(pmSR_raster, filename= glue("{spatdir}/Upper_limit_spp_r_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
 
 # Save workspace ----------------------------------------------------------
 save(list = c(ls()[!ls() %in% c("SR","covs_all_sc")]),
-     file = "data output/Species richness maps.RData")
+     file = glue("{spatdir}/Species richness maps_{spatscale}m.RData"))
 
 
