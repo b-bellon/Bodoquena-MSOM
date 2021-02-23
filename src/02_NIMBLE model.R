@@ -191,7 +191,7 @@ runMCMC_samples$WAIC # 4045.371
 runMCMC_samples$summary$all.chains %>%
   as_tibble %>%
   mutate(param = rownames(runMCMC_samples$summary$all.chains)) %>%
-  select(param, everything()) %>%
+  dplyr::select(param, everything()) %>%
   write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m.csv"))
 
 # Write posteriors to file ------------------------------------------------
