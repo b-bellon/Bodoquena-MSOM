@@ -126,9 +126,9 @@ plot(sdSR_raster, col=col_sd, main='Standard Deviation')
 dev.off()
 
 writeRaster(pmSR_raster, filename= glue("{spatdir}/Mean_spp_richness_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
-writeRaster(pmSR_raster, filename= glue("{spatdir}/SD_spp_richness_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
-writeRaster(pmSR_raster, filename= glue("{spatdir}/Lower_limit_spp_r_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
-writeRaster(pmSR_raster, filename= glue("{spatdir}/Upper_limit_spp_r_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(sdSR_raster, filename= glue("{spatdir}/SD_spp_richness_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(lowSR_raster, filename= glue("{spatdir}/Lower_limit_spp_r_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
+writeRaster(uppSR_raster, filename= glue("{spatdir}/Upper_limit_spp_r_{spatscale}m.tif"), format="GTiff", datatype="FLT4S", overwrite=TRUE)
 
 # Save workspace ----------------------------------------------------------
 save(list = c(ls()[!ls() %in% c("SR","covs_all_sc")]),
