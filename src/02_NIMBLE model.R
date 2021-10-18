@@ -217,15 +217,12 @@ runMCMC_samples$WAIC # 250m = 4056.404 || 750m = 4049.205 || 1250m = 4054.412
 runMCMC_samples$summary$all.chains %>%
   as_tibble %>%
   mutate(param = rownames(runMCMC_samples$summary$all.chains)) %>%
-<<<<<<< HEAD
-  select(param, everything()) %>%
-  write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m_BPV.csv"))
-=======
   dplyr::select(param, everything()) %>%
-  write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m.csv"))
->>>>>>> 29538cb5bbd38c3bb07b910e9cfd258ab0183a00
+  write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m_BPV.csv"))
+
 
 # Write posteriors to file ------------------------------------------------
+
 saveRDS(runMCMC_samples, glue("{spatdir}/mammal_mcmc_samples_{spatscale}m_BPV.rds"))
 
 # MCMC plotting -----------------------------------------------------------
