@@ -5,20 +5,21 @@ library(nimble)
 library(glue)
 
 # Define spatial scale ----------------------------------------------------
-spatscale <- 750 # meters
+spatscale <- 1250 # meters
 
 # Create dedicated output directory ---------------------------------------
 spatdir <- glue("data output/modelout_{spatscale}m")
 
 if(dir.exists(spatdir)){
   print("Directory exists")
-  } else {
-    dir.create(spatdir)
-    print("Directory created")
-  }
+} else {
+  dir.create(spatdir)
+  print("Directory created")
+}
 
 # Import scale-specific workspace -----------------------------------------
 load(glue("data output/model_data_{spatscale}m.RData"))
+
 
 # Define model ------------------------------------------------------------
 mammal_model <- nimbleCode({
@@ -30,21 +31,38 @@ mammal_model <- nimbleCode({
       z[i,k] ~ dbern(psi[i,k])
       logit(psi[i,k]) <- lpsi[k] + beta1[k]*produ[i] + beta2[k]*pheno[i] + beta3[k]*struc[i]
 
+      # Calculate residuals
+      yres[i,k]<-psi[i,k]-z[i,k]
     }
   }
 
   ## Observation model for observed data Y ##
 
   for(k in 1:nspec){            # Loop over species
-   for (i in 1:nsite) {         # Loop over sites
+    for (i in 1:nsite) {         # Loop over sites
 
-      logit(p[i,k]) <- lp[k] + alpha[1]*equals(season[i],2) + alpha[2]*equals(veg[i],2) # Fixed effect of rain season and open/under story
+      logit(p[i,k]) <- lp[k] + alpha[1]*equals(season[i],2) +
+        alpha[2]*equals(veg[i],2) # Fixed effect of rain season and open/under story
 
       mup[i,k] <- z[i,k] * p[i,k]
       ysum[i,k] ~ dbin(mup[i,k], J[i])
 
+      dev[i,k]<-(ysum[i,k]*log(mup[i,k]+0.00001)+(1-ysum[i,k])*log(1-(mup[i,k]-0.0001)))*-2
+
+      # Predict new observations and compute deviance
+      ysum.new[i,k] ~ dbin(mup[i,k], J[i])
+      dev.sim[i,k]<- (ysum.new[i,k]*log(mup[i,k]+0.00001)+(1-ysum.new[i,k])*log(1-(mup[i,k]-0.0001)))*-2
+
+      # Save this node to create plots
+      p_val[i,k] <- step(dev.sim[i,k] - dev[i,k])
+
     }
   }
+
+  # Estimate Bayesian p-value
+  sum.dev<-sum(dev[1:nsite,1:nspec])
+  sum.dev.sim<-sum(dev.sim[1:nsite,1:nspec])
+  test<-step(sum.dev.sim - sum.dev)
 
   # Species richness
   for (i in 1:nsite) {            # Loop over sites
@@ -92,12 +110,17 @@ mammal_model <- nimbleCode({
 
 })
 
-
 # Monitored parameters ----------------------------------------------------
 params <-  c("mu.psi","mu.p","alpha",
              "mu.beta1","mu.beta2","mu.beta3",
              "beta1", "beta2", "beta3",
-             "lpsi","lp","numspp","z")
+             "lpsi","lp","numspp","z",
+             "sum.dev", "sum.dev.sim",
+             "p_val",
+             "ysum.new","ysum",
+             "yres",
+             "test"
+)
 
 # Assign constants --------------------------------------------------------
 occ_mod_consts <- list(nspec = n_spp,
@@ -126,7 +149,7 @@ occ_mod_inits <- list(z = zst,
                       beta1 = rep(rnorm(1), occ_mod_consts$nspec),
                       beta2 = rep(rnorm(1), occ_mod_consts$nspec),
                       beta3 = rep(rnorm(1), occ_mod_consts$nspec)
-                      )
+)
 
 # Build the NIMBLE model --------------------------------------------------
 s0 <- Sys.time()
@@ -163,16 +186,18 @@ s4 <- Sys.time()
 # Final run
 # burn <- 15000
 # iter <- 60000
+# nthin <- 5
 
 # Test
 burn <- 1000
 iter <- 5000
+nthin <- 5
 
 runMCMC_samples <- runMCMC(compile_occ_MCMC,
                            nburnin = burn,
                            niter = iter,
                            nchains = 3,
-                           thin = 5,
+                           thin = nthin,
                            summary = TRUE,
                            samplesAsCodaMCMC = TRUE,
                            WAIC = TRUE)
@@ -185,22 +210,23 @@ e4-s4 + e3-s3 + e2-s2 + e1-s1 + e0-s0
 head(runMCMC_samples$summary$all.chains)
 
 ## WAIC check
-runMCMC_samples$WAIC # 4045.371
+runMCMC_samples$WAIC # 250m = 4056.404 || 750m = 4049.205 || 1250m = 4054.412
 
 # Write summary to file ---------------------------------------------------
+
 runMCMC_samples$summary$all.chains %>%
   as_tibble %>%
   mutate(param = rownames(runMCMC_samples$summary$all.chains)) %>%
   select(param, everything()) %>%
-  write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m.csv"))
+  write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m_BPV.csv"))
 
 # Write posteriors to file ------------------------------------------------
-saveRDS(runMCMC_samples, glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
+saveRDS(runMCMC_samples, glue("{spatdir}/mammal_mcmc_samples_{spatscale}m_BPV.rds"))
 
 # MCMC plotting -----------------------------------------------------------
 MCMCvis::MCMCtrace(runMCMC_samples$samples,
-          pdf = TRUE,
-          filename = glue("{spatdir}/nimble_traceplots_{spatscale}m.pdf"),
-          ind = TRUE,
-          n.eff = TRUE,
-          Rhat = TRUE)
+                   pdf = TRUE,
+                   filename = glue("{spatdir}/nimble_traceplots_{spatscale}m_BPV.pdf"),
+                   ind = TRUE,
+                   n.eff = TRUE,
+                   Rhat = TRUE)
