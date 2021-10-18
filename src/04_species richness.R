@@ -7,7 +7,7 @@ library(grDevices)
 library(glue)
 
 # Define spatial scale ----------------------------------------------------
-spatscale <- 750 # meters
+spatscale <- 1250 # meters
 
 # Read in basic JAGS model workspace --------------------------------------
 spatdir <- glue("data output/modelout_{spatscale}m")
