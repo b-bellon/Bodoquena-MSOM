@@ -7,7 +7,7 @@ library(grDevices)
 library(glue)
 
 # Define spatial scale ----------------------------------------------------
-spatscale <- 1250 # meters
+spatscale <- 250 # meters
 
 # Read in basic JAGS model workspace --------------------------------------
 spatdir <- glue("data output/modelout_{spatscale}m")
@@ -21,16 +21,31 @@ NDVI_produ <- raster(glue("data input/NDVI_produ_{spatscale}.tif"))
 NDVI_pheno <- raster(glue("data input/NDVI_pheno_{spatscale}.tif"))
 NDVI_struc <- raster(glue("data input/NDVI_struc_{spatscale}.tif"))
 
+# Read LM vectors ---------------------------------------------------------
+LM_points <- as.data.frame(readOGR(dsn="data input", layer="Landscape_metrics_pts"))
+
 # Extract LM values + pixels IDs ------------------------------------------
 NDVI_produ_vec <- as.vector(NDVI_produ)
 NDVI_pheno_vec <- as.vector(NDVI_pheno)
 NDVI_struc_vec <- as.vector(NDVI_struc)
+Slope_vec <- as.vector(LM_points$Slope)
+Elevation_vec <- as.vector(LM_points$Elevation)
+Dist_water_vec <- as.vector(LM_points$Dist_water)
+Dist_SBNP_vec <- as.vector(LM_points$Dist_SBNP)
+Dist_infra_vec <- as.vector(LM_points$Dist_infra)
 
-LMs_df <- as.data.frame(cbind(NDVI_produ_vec, NDVI_pheno_vec, NDVI_struc_vec))
+LMs_df <- as.data.frame(cbind(NDVI_produ_vec,
+                              NDVI_pheno_vec,
+                              NDVI_struc_vec,
+                              Slope_vec,
+                              Elevation_vec,
+                              Dist_water_vec,
+                              Dist_SBNP_vec,
+                              Dist_infra_vec))
 LMs_df$ID_pix <- seq.int(nrow(LMs_df))
 
-colnames(LMs_df) <- c("Produ","Pheno","Struc", "ID_pix")
-LMs_df <- LMs_df[, c(4, 1, 2, 3)] #reorder columns
+colnames(LMs_df) <- c("Produ","Pheno","Struc","Slope","Elev","Water","SBNP","Infra","ID_pix")
+LMs_df <- LMs_df[, c(9,1,2,3,4,5,6,7,8)] #reorder columns
 
 LMs_df[,2]<- as.integer(LMs_df[,2])
 LMs_df[,3]<- as.integer(LMs_df[,3])
