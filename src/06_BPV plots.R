@@ -11,7 +11,11 @@ library(glue)
 spatscale <- 250 # meters
 
 # Read in data ------------------------------------------------------------
-spatdir <- glue("data output/modelout_{spatscale}m")
+# spatdir <- glue("data output/modelout_{spatscale}m")
+
+# Updated analysis with new covariates
+spatdir <- glue("data output/modelout_{spatscale}m_v2")
+
 load(glue("data output/model_data_{spatscale}m.RData"))
 
 runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m_BPV.rds"))
