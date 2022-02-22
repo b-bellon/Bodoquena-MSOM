@@ -5,11 +5,15 @@ library(bayesboot)
 library(bayestestR)
 
 # Define spatial scale ----------------------------------------------------
-spatscale <- 750 # meters
+spatscale <- 250 # meters
 
 # Load data ---------------------------------------------------------------
-spatdir <- glue("data output/modelout_{spatscale}m")
-runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
+# spatdir <- glue("data output/modelout_{spatscale}m")
+
+# Updated analysis with new covariates
+spatdir <- glue("data output/modelout_{spatscale}m_v2")
+
+runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m_BPV.rds"))
 mod <- as.matrix(runMCMC_samples$samples)
 load(glue("data output/model_data_{spatscale}m.RData"))
 
@@ -43,8 +47,10 @@ mupsi <- plot_data %>%
 
 mubeta <- plot_data %>%
   filter(str_detect(param, "mu.beta")) %>%
-  mutate(param = as.factor(c("produ", "pheno", "struc"))) %>%
-  mutate(param = fct_relevel(param, "produ", "pheno", "struc"))
+  mutate(param = as.factor(c("produ", "pheno", "struc",
+                             "slope", "elev", "water", "sbnp", "infra"))) %>%
+  mutate(param = fct_relevel(param, "produ", "pheno", "struc",
+                             "slope", "elev", "water", "sbnp", "infra"))
 
 psi_spp <- plot_data %>%
   filter(str_detect(param,"lpsi")) %>%
@@ -70,7 +76,9 @@ beta_extract <- function(x){
     pull(mean)
 }
 
-beta_list <- map(c("^beta1","^beta2","^beta3"),
+beta_list <- map(c("^beta1","^beta2","^beta3",
+                   "^beta4","^beta5","^beta6",
+                   "^beta7","^beta8"),
                  beta_extract)
 
 # Detection coefficients --------------------------------------------------
@@ -106,12 +114,22 @@ ggsave(glue("{spatdir}/mubeta_{spatscale}m.jpg"))
 produ <- mod[,"mu.beta1"]
 pheno <- mod[,"mu.beta2"]
 struc <- mod[,"mu.beta3"]
+slope <- mod[,"mu.beta4"]
+elev <- mod[,"mu.beta5"]
+water <- mod[,"mu.beta6"]
+sbnp <- mod[,"mu.beta7"]
+infra <- mod[,"mu.beta8"]
 
-jpeg(glue("{spatdir}/HDI_mubeta_{spatscale}m.jpg"),width = 1000, height = 1100, res = 200)
-par(mfrow = c(3,1))
+jpeg(glue("{spatdir}/HDI_mubeta_{spatscale}m.jpg"),width = 2000, height = 2200, res = 200)
+par(mfrow = c(4,2))
 bayesboot::plotPost(produ, credMass = 0.89, xlim = c(-0.5,0.8))
 bayesboot::plotPost(pheno, credMass = 0.89, xlim = c(-0.5,0.8))
 bayesboot::plotPost(struc, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(elev, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(slope, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(water, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(sbnp, credMass = 0.89, xlim = c(-0.5,0.8))
+bayesboot::plotPost(infra, credMass = 0.89, xlim = c(-0.5,0.8))
 dev.off()
 
 rain_season <- mod[,"alpha[1]"]
@@ -172,6 +190,11 @@ strucvar <- glue("struc_{spatscale}")
 beta1_sc <- scale(station_data %>% pull({{prodvar}}))
 beta2_sc <- scale(station_data %>% pull({{phenovar}}))
 beta3_sc <- scale(station_data %>% pull({{strucvar}}))
+beta4_sc <- scale(station_data %>% pull(slope))
+beta5_sc <- scale(station_data %>% pull(elevation))
+beta6_sc <- scale(station_data %>% pull(dist_water))
+beta7_sc <- scale(station_data %>% pull(dist_sbnp))
+beta8_sc <- scale(station_data %>% pull(dist_infra))
 
 ## Predict over these range of values
 x <- seq(-2,2,0.01)
@@ -189,14 +212,36 @@ pred_data_extract <- function(sppvec){
   x3 <- x * attr(beta3_sc, 'scaled:scale') + attr(beta3_sc, 'scaled:center')
   pred3 <- plogis(lpsi[sppvec] + beta_list[[3]][sppvec] * x)
 
-  data <- tibble(mean = c(pred1,pred2,pred3),
-                 betas = c(rep("a) Productivity", length(x)),
-                           rep("b) Phenology", length(x)),
-                           rep("c) Structure", length(x))
-                           ),
+  x4 <- x * attr(beta4_sc, 'scaled:scale') + attr(beta4_sc, 'scaled:center')
+  pred4 <- plogis(lpsi[sppvec] + beta_list[[4]][sppvec] * x)
+
+  x5 <- x * attr(beta5_sc, 'scaled:scale') + attr(beta5_sc, 'scaled:center')
+  pred5 <- plogis(lpsi[sppvec] + beta_list[[5]][sppvec] * x)
+
+  x6 <- x * attr(beta6_sc, 'scaled:scale') + attr(beta6_sc, 'scaled:center')
+  pred6 <- plogis(lpsi[sppvec] + beta_list[[6]][sppvec] * x)
+
+  x7 <- x * attr(beta7_sc, 'scaled:scale') + attr(beta7_sc, 'scaled:center')
+  pred7 <- plogis(lpsi[sppvec] + beta_list[[7]][sppvec] * x)
+
+  x8 <- x * attr(beta8_sc, 'scaled:scale') + attr(beta8_sc, 'scaled:center')
+  pred8 <- plogis(lpsi[sppvec] + beta_list[[8]][sppvec] * x)
+
+  data <- tibble(mean = c(pred1,pred2,pred3,pred4,pred5,pred6,pred7,pred8),
+                 betas = c(
+                   rep("a) Productivity", length(x)),
+                   rep("b) Phenology", length(x)),
+                   rep("c) Structure", length(x)),
+                   rep("d) Slope", length(x)),
+                   rep("e) Elevation", length(x)),
+                   rep("f) Dist_water", length(x)),
+                   rep("g) Dist_SBNP", length(x)),
+                   rep("h) Dist_infra", length(x))
+                   ),
                  spp = as.character(sppvec),
-                 xdat = c(x1,x2,x3)
+                 xdat = c(x1,x2,x3,x4,x5,x6,x7,x8)
                  )
+  return(data)
 }
 
 pred_data <- map_df(1:n_spp,
@@ -204,8 +249,7 @@ pred_data <- map_df(1:n_spp,
 
 ## Check
 pred_data %>%
-  group_by(betas, spp) %>%
-  tally()
+  count(betas, spp)
 
 pred_data %>%
   ggplot(aes(x = xdat, y = mean, color = spp))+
