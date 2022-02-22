@@ -5,10 +5,13 @@ library(nimble)
 library(glue)
 
 # Define spatial scale ----------------------------------------------------
-spatscale <- 1250 # meters
+spatscale <- 250 # meters
 
 # Create dedicated output directory ---------------------------------------
-spatdir <- glue("data output/modelout_{spatscale}m")
+# spatdir <- glue("data output/modelout_{spatscale}m")
+
+# Updated analysis with new covariates
+spatdir <- glue("data output/modelout_{spatscale}m_v2")
 
 if(dir.exists(spatdir)){
   print("Directory exists")
@@ -20,7 +23,6 @@ if(dir.exists(spatdir)){
 # Import scale-specific workspace -----------------------------------------
 load(glue("data output/model_data_{spatscale}m.RData"))
 
-
 # Define model ------------------------------------------------------------
 mammal_model <- nimbleCode({
 
@@ -29,7 +31,9 @@ mammal_model <- nimbleCode({
     for (i in 1:nsite) {         # Loop over sites
 
       z[i,k] ~ dbern(psi[i,k])
-      logit(psi[i,k]) <- lpsi[k] + beta1[k]*produ[i] + beta2[k]*pheno[i] + beta3[k]*struc[i]
+      logit(psi[i,k]) <- lpsi[k] + beta1[k]*produ[i] + beta2[k]*pheno[i] +
+        beta3[k]*struc[i] + beta4[k]*slope[i] + beta5[k]*elev[i] +
+        beta6[k]*water[i] + beta7[k]*sbnp[i] + beta8[k]*infra[i]
 
       # Calculate residuals
       yres[i,k]<-psi[i,k]-z[i,k]
@@ -76,6 +80,11 @@ mammal_model <- nimbleCode({
     beta1[k] ~ dnorm(mu.beta1, tau.beta1)    # produ
     beta2[k] ~ dnorm(mu.beta2, tau.beta2)    # pheno
     beta3[k] ~ dnorm(mu.beta3, tau.beta3)    # struc
+    beta4[k] ~ dnorm(mu.beta4, tau.beta4)    # slope
+    beta5[k] ~ dnorm(mu.beta5, tau.beta5)    # elev
+    beta6[k] ~ dnorm(mu.beta6, tau.beta6)    # water
+    beta7[k] ~ dnorm(mu.beta7, tau.beta7)    # sbnp
+    beta8[k] ~ dnorm(mu.beta8, tau.beta8)    # infra
   }
 
   for(k in 1:2){                # 2 terms in detection model
@@ -108,12 +117,41 @@ mammal_model <- nimbleCode({
   sd.beta3 <- abs(x.beta3)
   tau.beta3 <- pow(sd.beta3, -2)
 
+  mu.beta4 ~ dnorm(0, 0.1)
+  x.beta4 ~ dt(0,1,1)
+  sd.beta4 <- abs(x.beta4)
+  tau.beta4 <- pow(sd.beta4, -2)
+
+  mu.beta5 ~ dnorm(0, 0.1)
+  x.beta5 ~ dt(0,1,1)
+  sd.beta5 <- abs(x.beta5)
+  tau.beta5 <- pow(sd.beta5, -2)
+
+  mu.beta6 ~ dnorm(0, 0.1)
+  x.beta6 ~ dt(0,1,1)
+  sd.beta6 <- abs(x.beta6)
+  tau.beta6 <- pow(sd.beta6, -2)
+
+  mu.beta7 ~ dnorm(0, 0.1)
+  x.beta7 ~ dt(0,1,1)
+  sd.beta7 <- abs(x.beta7)
+  tau.beta7 <- pow(sd.beta7, -2)
+
+  mu.beta8 ~ dnorm(0, 0.1)
+  x.beta8 ~ dt(0,1,1)
+  sd.beta8 <- abs(x.beta8)
+  tau.beta8 <- pow(sd.beta8, -2)
+
 })
 
 # Monitored parameters ----------------------------------------------------
 params <-  c("mu.psi","mu.p","alpha",
              "mu.beta1","mu.beta2","mu.beta3",
+             "mu.beta4","mu.beta5","mu.beta6",
+             "mu.beta7","mu.beta8",
              "beta1", "beta2", "beta3",
+             "beta4", "beta5", "beta6",
+             "beta7", "beta8",
              "lpsi","lp","numspp","z",
              "sum.dev", "sum.dev.sim",
              "p_val",
@@ -133,7 +171,12 @@ occ_mod_data <- list(ysum = Y,
                      season = season_vec,
                      produ = produ_vec,
                      pheno = pheno_vec,
-                     struc = struc_vec)
+                     struc = struc_vec,
+                     slope = slope_vec,
+                     elev = elev_vec,
+                     water = water_vec,
+                     sbnp = sbnp_vec,
+                     infra = infra_vec)
 
 # Initial values ----------------------------------------------------------
 zst <- array(1, dim = c(n_sites,n_spp)) # Observed occurrence as inits for z
@@ -146,9 +189,20 @@ occ_mod_inits <- list(z = zst,
                       mu.beta1 = rnorm(1),
                       mu.beta2 = rnorm(1),
                       mu.beta3 = rnorm(1),
+                      mu.beta4 = rnorm(1),
+                      mu.beta5 = rnorm(1),
+                      mu.beta6 = rnorm(1),
+                      mu.beta7 = rnorm(1),
+                      mu.beta8 = rnorm(1),
                       beta1 = rep(rnorm(1), occ_mod_consts$nspec),
                       beta2 = rep(rnorm(1), occ_mod_consts$nspec),
-                      beta3 = rep(rnorm(1), occ_mod_consts$nspec)
+                      beta3 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta4 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta5 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta6 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta7 = rep(rnorm(1), occ_mod_consts$nspec),
+                      beta8 = rep(rnorm(1), occ_mod_consts$nspec)
+
 )
 
 # Build the NIMBLE model --------------------------------------------------
@@ -213,16 +267,13 @@ head(runMCMC_samples$summary$all.chains)
 runMCMC_samples$WAIC # 250m = 4056.404 || 750m = 4049.205 || 1250m = 4054.412
 
 # Write summary to file ---------------------------------------------------
-
 runMCMC_samples$summary$all.chains %>%
   as_tibble %>%
   mutate(param = rownames(runMCMC_samples$summary$all.chains)) %>%
   dplyr::select(param, everything()) %>%
   write_csv(glue("{spatdir}/mammal_mcmc_out_{spatscale}m_BPV.csv"))
 
-
 # Write posteriors to file ------------------------------------------------
-
 saveRDS(runMCMC_samples, glue("{spatdir}/mammal_mcmc_samples_{spatscale}m_BPV.rds"))
 
 # MCMC plotting -----------------------------------------------------------
