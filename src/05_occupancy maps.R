@@ -6,12 +6,16 @@ library(grDevices)
 library(glue)
 
 # Define spatial scale ----------------------------------------------------
-spatscale <- 750 # meters
+spatscale <- 250 # meters
 
 # Read in basic JAGS model workspace --------------------------------------
-spatdir <- glue("data output/modelout_{spatscale}m")
+# spatdir <- glue("data output/modelout_{spatscale}m")
+
+# Updated analysis with new covariates
+spatdir <- glue("data output/modelout_{spatscale}m_v2")
+
 load(glue("data output/model_data_{spatscale}m.RData"))
-runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m.rds"))
+runMCMC_samples <- readRDS(glue("{spatdir}/mammal_mcmc_samples_{spatscale}m_BPV.rds"))
 mod <- as.matrix(runMCMC_samples$samples)
 dim(mod)
 
@@ -19,8 +23,8 @@ dim(mod)
 LMs_df <- read.csv(glue("data input/Landscape_metrics_values_{spatscale}m.csv"))
 
 covs_all_sc <- LMs_df %>%
-  mutate_at(vars(Produ:Struc),scale) %>%
-  mutate_at(vars(Produ:Struc),as.numeric)
+  mutate_at(vars(Produ:Infra),scale) %>%
+  mutate_at(vars(Produ:Infra),as.numeric)
 covs_all_sc
 
 # Create array ------------------------------------------------------------
@@ -34,7 +38,7 @@ str(psi_pen <- array(NA, dim = c(n_pix, n_samp,n_spp)))
 
 # Acccess node names and extract posterior samples ------------------------
 att <- attributes(mod)$dimnames[2][[1]][]
-coeffs <- c("lpsi","beta1","beta2","beta3")
+coeffs <- c("lpsi","beta1","beta2","beta3","beta4","beta5","beta6","beta7","beta8")
 coeff_out <- list()
 
 for(i in 1:length(coeffs)){
@@ -42,23 +46,28 @@ for(i in 1:length(coeffs)){
                  !grepl(c("sd"),att) & !grepl(c("mu"),att)) # Exclude sd and mu
   coeff_out[[i]] <- mod[,ref]
 }
-names(coeff_out) <- c("LPSI","BETA1","BETA2","BETA3")
+names(coeff_out) <- c("LPSI","BETA1","BETA2","BETA3","BETA4","BETA5","BETA6","BETA7","BETA8")
 
 ## Check
 coeff_out$LPSI[1:5,1:5]
-coeff_out$BETA3[1:5,1:5]
+coeff_out$BETA8[1:5,1:5]
 
 # Occupancy prediction ----------------------------------------------------
-
 for (s in 1:n_spp){
   print.vec <- seq(0,n_spp, by = 1)
   if(s %in% print.vec){cat(paste("\nSpecies ", s))}
   for(i in 1:n_pix){
     for(u in 1:length(select_samp)){
-      psi <- plogis(coeff_out[["LPSI"]][select_samp[u],s] +
-                      coeff_out[["BETA1"]][select_samp[u],s] * covs_all_sc$Produ[i] +
-                      coeff_out[["BETA2"]][select_samp[u],s] * covs_all_sc$Pheno[i] +
-                      coeff_out[["BETA3"]][select_samp[u],s] * covs_all_sc$Struc[i])
+      psi <- plogis(
+        coeff_out[["LPSI"]][select_samp[u],s] +
+          coeff_out[["BETA1"]][select_samp[u],s] * covs_all_sc$Produ[i] +
+          coeff_out[["BETA2"]][select_samp[u],s] * covs_all_sc$Pheno[i] +
+          coeff_out[["BETA3"]][select_samp[u],s] * covs_all_sc$Struc[i] +
+          coeff_out[["BETA4"]][select_samp[u],s] * covs_all_sc$Slope[i] +
+          coeff_out[["BETA5"]][select_samp[u],s] * covs_all_sc$Elev[i] +
+          coeff_out[["BETA6"]][select_samp[u],s] * covs_all_sc$Water[i]+
+          coeff_out[["BETA7"]][select_samp[u],s] * covs_all_sc$SBNP[i] +
+          coeff_out[["BETA8"]][select_samp[u],s] * covs_all_sc$Infra[i])
       psi_pen[i,u,s] <- psi
     }
   }
