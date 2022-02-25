@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1645528208789.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "45332897",
+    "id" : "5493290F",
+    "lastKnownWriteTime" : 1645528157,
+    "last_content_update" : 1645528157,
+    "path" : "~/GitHub/Bodoquena-MSOM/src/01_data import.R",
+    "project_path" : "src/01_data import.R",
+    "properties" : {
+        "cursorPosition" : "67,0",
+        "scrollLine" : "39"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

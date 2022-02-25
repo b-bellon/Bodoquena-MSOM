@@ -216,7 +216,7 @@ e0-s0
 
 ## Build an MCMC object for this
 s1 <- Sys.time()
-occ_model_MCMC <- buildMCMC(occ_model, monitors = params, enableWAIC = TRUE)
+occ_model_MCMC <- buildMCMC(occ_model, monitors = params, enableWAIC = FALSE)
 e1 <- Sys.time()
 e1-s1
 
@@ -254,7 +254,7 @@ runMCMC_samples <- runMCMC(compile_occ_MCMC,
                            thin = nthin,
                            summary = TRUE,
                            samplesAsCodaMCMC = TRUE,
-                           WAIC = TRUE)
+                           WAIC = FALSE)
 e4 <- Sys.time()
 e4-s4
 
@@ -264,7 +264,7 @@ e4-s4 + e3-s3 + e2-s2 + e1-s1 + e0-s0
 head(runMCMC_samples$summary$all.chains)
 
 ## WAIC check
-runMCMC_samples$WAIC # 250m = 4056.404 || 750m = 4049.205 || 1250m = 4054.412
+# runMCMC_samples$WAIC # 250m = 4056.404 || 750m = 4049.205 || 1250m = 4054.412
 
 # Write summary to file ---------------------------------------------------
 runMCMC_samples$summary$all.chains %>%
